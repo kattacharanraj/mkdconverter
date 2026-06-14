@@ -84,9 +84,9 @@
 
     let currentFileName = 'crk-export';
 
-    const DEFAULT_CONTENT = `# Welcome to CRK Converter ⚡
+    const DEFAULT_CONTENT = `# Welcome to Markdown Converter ⚡
 
-This is a **Cyberpunk-styled** Markdown to PDF/DOCX converter running purely in your browser.
+This is a Markdown to PDF/DOCX converter running purely in your browser.
 
 ## Features
 
@@ -102,7 +102,7 @@ function engageHyperdrive() {
 }
 \`\`\`
 
-> "The grid is digital, but the code is real."
+> "In a world of users,be the onewho programs."
 
 | Format | Support | Status |
 |--------|---------|--------|
