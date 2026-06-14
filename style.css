@@ -31,6 +31,76 @@
     --radius-sm: 0px; /* Cyberpunk is angular */
     --radius-md: 0px;
     --radius-lg: 0px;
+
+    /* themeable extras (overridden per theme below) */
+    --nav-bg: rgba(15, 17, 26, 0.8);
+    --hero-title-color: #ffffff;
+    --logo-color: #ffffff;
+    --hero-glow: rgba(0, 240, 255, 0.05);
+    --badge-bg: rgba(0, 240, 255, 0.1);
+    --quote-bg: rgba(0, 240, 255, 0.05);
+}
+
+/* =========================================
+   THEME: PORTFOLIO  (kattacharanraj.github.io — warm gold on black)
+   ========================================= */
+:root[data-theme="portfolio"] {
+    --bg-main: #050505;
+    --bg-surface: #0a0a0a;
+    --bg-surface-elevated: #0f0f0f;
+    --text-primary: #f0ede6;
+    --text-secondary: rgba(240, 237, 230, 0.55);
+    --accent-yellow: #e2d4bc;   /* accent-bright */
+    --accent-cyan: #c8b89a;     /* primary gold accent */
+    --accent-pink: #8b3a3a;     /* muted red accent */
+    --accent-green: #c8b89a;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.18);
+    --shadow-neon: 0 0 0 transparent;
+    --shadow-card: 0 20px 50px rgba(0, 0, 0, 0.6);
+    --font-sans: 'Syne', sans-serif;
+    --font-heading: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --nav-bg: rgba(5, 5, 5, 0.8);
+    --hero-title-color: #f0ede6;
+    --logo-color: #c8b89a;
+    --hero-glow: rgba(200, 184, 154, 0.08);
+    --badge-bg: rgba(200, 184, 154, 0.10);
+    --quote-bg: rgba(200, 184, 154, 0.06);
+}
+
+/* =========================================
+   THEME: MINIMAL  (premium black & white for professionals)
+   ========================================= */
+:root[data-theme="minimal"] {
+    --bg-main: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f6f7f8;
+    --text-primary: #1a1a1a;
+    --text-secondary: #6b7280;
+    --accent-yellow: #111111;
+    --accent-cyan: #111111;
+    --accent-pink: #374151;
+    --accent-green: #111111;
+    --border-color: #e4e4e7;
+    --border-hover: #b8b8bd;
+    --shadow-neon: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 10px 30px rgba(0, 0, 0, 0.05);
+    --font-sans: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-heading: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'Consolas', ui-monospace, 'SF Mono', monospace;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --nav-bg: rgba(255, 255, 255, 0.88);
+    --hero-title-color: #0a0a0a;
+    --logo-color: #0a0a0a;
+    --hero-glow: transparent;
+    --badge-bg: #f0f0f0;
+    --quote-bg: #f7f7f8;
 }
 
 * {
@@ -191,7 +261,7 @@ h1, h2, h3, h4, h5, h6 {
     justify-content: space-between;
     align-items: center;
     padding: 15px 30px;
-    background-color: rgba(15, 17, 26, 0.8);
+    background-color: var(--nav-bg);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
     position: sticky;
@@ -207,6 +277,7 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     gap: 8px;
     letter-spacing: 2px;
+    color: var(--logo-color);
 }
 
 .logo-icon {
@@ -236,7 +307,7 @@ h1, h2, h3, h4, h5, h6 {
     top: -50%; left: 50%;
     transform: translateX(-50%);
     width: 60vw; height: 60vw;
-    background: radial-gradient(circle, rgba(0,240,255,0.05) 0%, transparent 70%);
+    background: radial-gradient(circle, var(--hero-glow) 0%, transparent 70%);
     z-index: -1;
     pointer-events: none;
 }
@@ -245,6 +316,7 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 3rem;
     margin-bottom: 15px;
     text-transform: uppercase;
+    color: var(--hero-title-color);
 }
 
 .hero p {
@@ -346,7 +418,7 @@ h1, h2, h3, h4, h5, h6 {
 .format-badge {
     font-size: 0.7rem;
     padding: 2px 6px;
-    background: rgba(0, 240, 255, 0.1);
+    background: var(--badge-bg);
     color: var(--accent-cyan);
     border: 1px solid var(--accent-cyan);
     border-radius: 4px;
@@ -542,7 +614,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0 1em;
     color: var(--text-secondary);
     border-left: 0.25em solid var(--accent-cyan);
-    background: rgba(0, 240, 255, 0.05);
+    background: var(--quote-bg);
     margin: 0 0 16px 0;
     padding: 10px 15px;
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
@@ -863,3 +935,76 @@ body::after {
     .hero h1.glitch-title .glitch-reveal { transition: none; }
     body::after { animation: none; opacity: 0.2; }
 }
+
+/* =========================================
+   THEME OVERRIDES — strip cyberpunk-only chrome on the
+   professional themes (angular corners, scanlines, glitch),
+   and round/repaint components to match each palette.
+   ========================================= */
+
+/* Smooth crossfade when switching themes */
+body,
+.navbar, .panel, .panel-header, .panel-footer, .feature-card,
+.btn, .toast, .preview-container, #editor {
+    transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
+}
+
+/* --- Kill the cyberpunk decoration on portfolio + minimal --- */
+[data-theme="portfolio"] body::after,
+[data-theme="minimal"] body::after { display: none; }
+
+[data-theme="portfolio"] .glitch-layer,
+[data-theme="minimal"] .glitch-layer { display: none !important; }
+
+[data-theme="portfolio"] .hero h1.glitch-title .glitch-reveal,
+[data-theme="minimal"] .hero h1.glitch-title .glitch-reveal { display: none !important; }
+
+[data-theme="portfolio"] .hero h1.glitch-title,
+[data-theme="minimal"] .hero h1.glitch-title { cursor: default; }
+
+/* Rounded corners instead of angular clip-paths */
+[data-theme="portfolio"] .btn,
+[data-theme="minimal"] .btn { clip-path: none; border-radius: var(--radius-md); }
+[data-theme="portfolio"] .btn::after,
+[data-theme="minimal"] .btn::after { display: none; }
+
+[data-theme="portfolio"] .panel,
+[data-theme="minimal"] .panel { clip-path: none; border-radius: var(--radius-lg); }
+[data-theme="portfolio"] .panel::after,
+[data-theme="minimal"] .panel::after { display: none; }
+
+[data-theme="portfolio"] .feature-card,
+[data-theme="minimal"] .feature-card { clip-path: none; border-radius: var(--radius-lg); }
+[data-theme="portfolio"] .feature-card::after,
+[data-theme="minimal"] .feature-card::after { display: none; }
+
+[data-theme="portfolio"] .toast,
+[data-theme="minimal"] .toast { clip-path: none; border-radius: var(--radius-sm); }
+
+/* Hover lift for feature cards keeps the right accent per theme */
+[data-theme="minimal"] .feature-card:hover { box-shadow: var(--shadow-card); border-color: var(--border-hover); }
+
+/* --- MINIMAL: clean monochrome buttons + readable dark code blocks --- */
+[data-theme="minimal"] .btn-primary { background: #111111; color: #ffffff; }
+[data-theme="minimal"] .btn-primary:hover { background: #000000; color: #ffffff; }
+[data-theme="minimal"] .btn-secondary { background: #ffffff; color: #111111; border: 1px solid #111111; }
+[data-theme="minimal"] .btn-secondary:hover { background: #111111; color: #ffffff; }
+[data-theme="minimal"] .btn-outline { background: #ffffff; color: #111111; border: 1px solid var(--border-color); border-left: 1px solid var(--border-color); }
+[data-theme="minimal"] .btn-outline:hover { background: #f3f4f6; color: #000000; }
+[data-theme="minimal"] .btn-small { background: #f3f4f6; color: #111111; border: 1px solid var(--border-color); }
+[data-theme="minimal"] .btn-small:hover { background: #111111; color: #ffffff; }
+
+/* The bundled hljs theme is dark — give code a dark card so it stays legible on white */
+[data-theme="minimal"] .markdown-body pre { background: #0d1117; border-color: #30363d; }
+[data-theme="minimal"] .markdown-body pre,
+[data-theme="minimal"] .markdown-body pre code { color: #e6edf3; }
+
+/* --- PORTFOLIO: gold primary, ghost outlines --- */
+[data-theme="portfolio"] .btn-primary { background: var(--accent-cyan); color: #050505; }
+[data-theme="portfolio"] .btn-primary:hover { background: var(--accent-yellow); color: #050505; }
+[data-theme="portfolio"] .btn-secondary { background: transparent; color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }
+[data-theme="portfolio"] .btn-secondary:hover { background: var(--accent-cyan); color: #050505; }
+[data-theme="portfolio"] .btn-outline { background: transparent; color: var(--accent-cyan); border: 1px solid var(--border-hover); border-left: 1px solid var(--border-hover); }
+[data-theme="portfolio"] .btn-outline:hover { background: rgba(200, 184, 154, 0.10); color: var(--accent-yellow); }
+[data-theme="portfolio"] .btn-small { background: var(--bg-surface-elevated); color: var(--text-primary); border: 1px solid var(--border-color); }
+[data-theme="portfolio"] .btn-small:hover { background: var(--accent-cyan); color: #050505; }

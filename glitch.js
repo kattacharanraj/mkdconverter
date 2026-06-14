@@ -22,6 +22,7 @@
         for (var i = 0; i < buttons.length; i++) {
             var btn = buttons[i];
             if (btn.dataset.glitchInit) continue;
+            if (btn.hasAttribute('data-no-glitch')) continue;
             btn.dataset.glitchInit = '1';
 
             var label = (btn.textContent || '').trim();

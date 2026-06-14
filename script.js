@@ -464,9 +464,12 @@ function engageHyperdrive() {
     }
 
     // ------------------------------------------
-    // EXPORT: DOCX
-    // Uses html-docx-js to produce a real .docx when available, falling back to
-    // a Word-compatible HTML document otherwise.
+    // EXPORT: WORD (.doc)
+    // We deliberately emit a Word-compatible HTML document (.doc) rather than a
+    // packaged .docx. html-docx-js embeds the body as an OOXML "altChunk", which
+    // ONLY desktop MS Word knows how to expand — Google Docs and the Word mobile
+    // apps render that as a BLANK page. A Word-HTML .doc opens with full content
+    // everywhere: desktop Word, Word mobile, Google Docs, LibreOffice.
     // ------------------------------------------
     function buildExportHtml() {
         let body = preview.innerHTML;
@@ -477,11 +480,16 @@ function engageHyperdrive() {
             .replace(/<th/g, '<th style="border: 1px solid #000000; padding: 6px; background-color: #f2f2f2; font-weight: bold;"')
             .replace(/<td/g, '<td style="border: 1px solid #000000; padding: 6px;"');
 
+        // The mso block gives Word real A4 page geometry/margins on open.
         const head = `<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
 <head>
     <meta charset='utf-8'>
-    <title>Export</title>
-    <style>${exportStyles(false)}</style>
+    <title>${escapeHtml(currentFileName)}</title>
+    <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+    <style>
+        @page { size: A4; margin: 2cm; }
+        ${exportStyles(false)}
+    </style>
 </head>
 <body>`;
         return head + body + '</body></html>';
@@ -492,21 +500,14 @@ function engageHyperdrive() {
 
         try {
             const sourceHTML = buildExportHtml();
-            let blob;
-
-            if (typeof htmlDocx !== 'undefined' && typeof htmlDocx.asBlob === 'function') {
-                // Real Office Open XML document.
-                blob = htmlDocx.asBlob(sourceHTML);
-            } else {
-                // Fallback: Word-readable HTML with a real BOM (U+FEFF).
-                blob = new Blob(['﻿', sourceHTML], { type: 'application/msword' });
-            }
-
-            downloadBlob(blob, currentFileName + '.docx');
-            showToast('DOCX exported.', 'success');
+            // Leading U+FEFF BOM + application/msword makes every Word reader treat
+            // the HTML as a document and decode UTF-8 (so emojis survive).
+            const blob = new Blob(['﻿', sourceHTML], { type: 'application/msword' });
+            downloadBlob(blob, currentFileName + '.doc');
+            showToast('Word document exported.', 'success');
         } catch (err) {
-            console.error('DOCX generation failed:', err);
-            showToast('DOCX export failed. See console.', 'error');
+            console.error('Word generation failed:', err);
+            showToast('Word export failed. See console.', 'error');
         }
     }
 
