@@ -156,6 +156,34 @@ function engageHyperdrive() {
         setTimeout(() => URL.revokeObjectURL(url), 1500);
     }
 
+    function isMobileDevice() {
+        return /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent) ||
+            // iPadOS 13+ reports as desktop Safari, so detect it via touch points.
+            (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+    }
+
+    // Save a blob. On phones/tablets the classic <a download> is unreliable —
+    // iOS Safari ignores it for blob URLs — so we use the Web Share API, which
+    // pops the native sheet to save into Files / Word / Drive / Mail. Desktop
+    // keeps the silent direct download. (Web Share needs a secure context:
+    // works on HTTPS and on localhost, NOT on a plain http LAN IP.)
+    async function saveFile(blob, filename, mime) {
+        if (isMobileDevice() && typeof navigator.canShare === 'function') {
+            try {
+                const file = new File([blob], filename, { type: mime || blob.type || 'application/octet-stream' });
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: filename });
+                    return 'shared';
+                }
+            } catch (err) {
+                if (err && err.name === 'AbortError') return 'cancelled';
+                console.warn('Web Share failed; falling back to direct download.', err);
+            }
+        }
+        downloadBlob(blob, filename);
+        return 'downloaded';
+    }
+
     // ------------------------------------------
     // CORE: RENDER & STATS
     // ------------------------------------------
@@ -495,16 +523,222 @@ function engageHyperdrive() {
         return head + body + '</body></html>';
     }
 
-    function exportToDOCX() {
+    // ------------------------------------------
+    // REAL .docx (OOXML) GENERATION
+    // Builds a genuine Office Open XML package with JSZip so the file opens
+    // natively in Google Docs and the Word apps on Android/iOS. (The old
+    // altChunk / Word-HTML approaches render blank in non-desktop viewers.)
+    // ------------------------------------------
+    function dxEsc(s) {
+        return String(s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // One run of text with optional formatting; newlines become <w:br/>.
+    function dxRun(text, fmt) {
+        fmt = fmt || {};
+        if (text === '' || text == null) return '';
+        let rpr = '';
+        if (fmt.bold) rpr += '<w:b/>';
+        if (fmt.italic) rpr += '<w:i/>';
+        if (fmt.strike) rpr += '<w:strike/>';
+        if (fmt.code) rpr += '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/><w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/><w:color w:val="C7254E"/>';
+        if (fmt.link) rpr += '<w:color w:val="0563C1"/><w:u w:val="single"/>';
+        if (fmt.color && !fmt.code && !fmt.link) rpr += '<w:color w:val="' + fmt.color + '"/>';
+        if (fmt.sz) rpr += '<w:sz w:val="' + fmt.sz + '"/><w:szCs w:val="' + fmt.sz + '"/>';
+        const rprXml = rpr ? '<w:rPr>' + rpr + '</w:rPr>' : '';
+        const parts = String(text).split('\n');
+        let inner = '';
+        for (let i = 0; i < parts.length; i++) {
+            if (i > 0) inner += '<w:br/>';
+            inner += '<w:t xml:space="preserve">' + dxEsc(parts[i]) + '</w:t>';
+        }
+        return '<w:r>' + rprXml + inner + '</w:r>';
+    }
+
+    // Walk inline child nodes accumulating formatted runs.
+    function dxInline(node, fmt) {
+        fmt = fmt || {};
+        let out = '';
+        node.childNodes.forEach(function (child) {
+            if (child.nodeType === 3) { out += dxRun(child.nodeValue, fmt); return; }
+            if (child.nodeType !== 1) return;
+            const tag = child.tagName.toLowerCase();
+            if (tag === 'br') { out += '<w:r><w:br/></w:r>'; return; }
+            if (tag === 'input') { out += dxRun(child.checked ? '☑ ' : '☐ ', fmt); return; }
+            if (tag === 'img') { out += dxRun('[image: ' + (child.getAttribute('alt') || '') + ']', fmt); return; }
+            const f = Object.assign({}, fmt);
+            if (tag === 'strong' || tag === 'b') f.bold = true;
+            else if (tag === 'em' || tag === 'i') f.italic = true;
+            else if (tag === 'del' || tag === 's' || tag === 'strike') f.strike = true;
+            else if (tag === 'code') f.code = true;
+            else if (tag === 'a') f.link = true;
+            out += dxInline(child, f);
+        });
+        return out;
+    }
+
+    function dxPara(runsXml, pprInner) {
+        const ppr = pprInner ? '<w:pPr>' + pprInner + '</w:pPr>' : '';
+        return '<w:p>' + ppr + (runsXml || '') + '</w:p>';
+    }
+
+    // Lists become indented paragraphs with bullet/number prefixes (no
+    // numbering.xml needed — renders correctly in every viewer).
+    function dxList(listNode, ordered, depth) {
+        let xml = '';
+        let idx = 1;
+        listNode.childNodes.forEach(function (li) {
+            if (li.nodeType !== 1 || li.tagName.toLowerCase() !== 'li') return;
+            const clone = li.cloneNode(true);
+            Array.prototype.slice.call(clone.querySelectorAll('ul,ol')).forEach(function (n) {
+                n.parentNode.removeChild(n);
+            });
+            const prefix = ordered ? (idx + '. ') : '• ';
+            idx++;
+            const ind = 360 + depth * 360;
+            xml += dxPara(dxRun(prefix, {}) + dxInline(clone, {}), '<w:ind w:left="' + ind + '"/>');
+            li.childNodes.forEach(function (c) {
+                if (c.nodeType === 1 && /^(ul|ol)$/.test(c.tagName.toLowerCase())) {
+                    xml += dxList(c, c.tagName.toLowerCase() === 'ol', depth + 1);
+                }
+            });
+        });
+        return xml;
+    }
+
+    function dxTable(table) {
+        const sides = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'];
+        let borders = '<w:tblBorders>';
+        sides.forEach(function (b) { borders += '<w:' + b + ' w:val="single" w:sz="4" w:space="0" w:color="999999"/>'; });
+        borders += '</w:tblBorders>';
+        let rowsXml = '';
+        Array.prototype.slice.call(table.querySelectorAll('tr')).forEach(function (tr) {
+            let cellsXml = '';
+            tr.childNodes.forEach(function (cell) {
+                if (cell.nodeType !== 1) return;
+                const tg = cell.tagName.toLowerCase();
+                if (tg !== 'td' && tg !== 'th') return;
+                const isHead = tg === 'th';
+                const shd = isHead ? '<w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/>' : '';
+                cellsXml += '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>' + shd + '</w:tcPr>' +
+                    dxPara(dxInline(cell, { bold: isHead }), '') + '</w:tc>';
+            });
+            if (cellsXml) rowsXml += '<w:tr>' + cellsXml + '</w:tr>';
+        });
+        return '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>' + borders + '</w:tblPr>' + rowsXml + '</w:tbl>' + dxPara('', '');
+    }
+
+    function dxBlocks(container) {
+        const HSIZE = { h1: 36, h2: 32, h3: 28, h4: 26, h5: 24, h6: 22 };
+        let xml = '';
+        container.childNodes.forEach(function (node) {
+            if (node.nodeType === 3) {
+                if (node.nodeValue.trim() !== '') xml += dxPara(dxRun(node.nodeValue, {}), '');
+                return;
+            }
+            if (node.nodeType !== 1) return;
+            const tag = node.tagName.toLowerCase();
+            if (HSIZE[tag]) {
+                xml += dxPara(dxInline(node, { bold: true, sz: HSIZE[tag] }), '<w:spacing w:before="240" w:after="120"/>');
+            } else if (tag === 'p') {
+                xml += dxPara(dxInline(node, {}), '<w:spacing w:after="160"/>');
+            } else if (tag === 'ul' || tag === 'ol') {
+                xml += dxList(node, tag === 'ol', 0);
+            } else if (tag === 'blockquote') {
+                node.childNodes.forEach(function (c) {
+                    if (c.nodeType === 1) {
+                        xml += dxPara(dxInline(c, { italic: true, color: '555555' }),
+                            '<w:ind w:left="480"/><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="CCCCCC"/></w:pBdr>');
+                    } else if (c.nodeType === 3 && c.nodeValue.trim() !== '') {
+                        xml += dxPara(dxRun(c.nodeValue, { italic: true, color: '555555' }), '<w:ind w:left="480"/>');
+                    }
+                });
+            } else if (tag === 'pre') {
+                const codeText = node.textContent.replace(/\n+$/, '');
+                xml += dxPara(dxRun(codeText, { code: true, sz: 20 }), '<w:shd w:val="clear" w:color="auto" w:fill="F6F8FA"/>');
+            } else if (tag === 'table') {
+                xml += dxTable(node);
+            } else if (tag === 'hr') {
+                xml += dxPara('', '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="CCCCCC"/></w:pBdr>');
+            } else {
+                xml += dxBlocks(node);
+            }
+        });
+        return xml;
+    }
+
+    // Assemble the OOXML package and return a Promise<Blob>.
+    function buildDocxBlob() {
+        let body = dxBlocks(preview);
+        if (!body) body = '<w:p/>';
+        const sect = '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>';
+        const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            body + sect + '</w:body></w:document>';
+
+        const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+            '<Default Extension="xml" ContentType="application/xml"/>' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+            '</Types>';
+
+        const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+            '</Relationships>';
+
+        const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+            '</Relationships>';
+
+        const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+            '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+            '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+            '</w:styles>';
+
+        const zip = new JSZip();
+        zip.file('[Content_Types].xml', contentTypes);
+        zip.folder('_rels').file('.rels', rels);
+        const wf = zip.folder('word');
+        wf.file('document.xml', documentXml);
+        wf.file('styles.xml', stylesXml);
+        wf.folder('_rels').file('document.xml.rels', docRels);
+        return zip.generateAsync({
+            type: 'blob',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            compression: 'DEFLATE'
+        });
+    }
+
+    async function exportToDOCX() {
         if (!editor.value.trim()) { showToast('Nothing to export yet.', 'error'); return; }
 
         try {
+            // Preferred: a REAL .docx (OOXML) — opens natively in Google Docs and
+            // the Word apps on Android/iOS, where the Word-HTML .doc shows blank.
+            if (typeof JSZip !== 'undefined') {
+                const docxBlob = await buildDocxBlob();
+                const howX = await saveFile(docxBlob, currentFileName + '.docx',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+                if (howX === 'cancelled') return;
+                showToast(howX === 'shared' ? 'Choose where to save the .docx file.' : 'Word (.docx) exported.', 'success');
+                return;
+            }
+
+            // Fallback (JSZip unavailable): Word-compatible HTML saved as .doc.
             const sourceHTML = buildExportHtml();
             // Leading U+FEFF BOM + application/msword makes every Word reader treat
             // the HTML as a document and decode UTF-8 (so emojis survive).
             const blob = new Blob(['﻿', sourceHTML], { type: 'application/msword' });
-            downloadBlob(blob, currentFileName + '.doc');
-            showToast('Word document exported.', 'success');
+            const how = await saveFile(blob, currentFileName + '.doc', 'application/msword');
+            if (how === 'cancelled') return;
+            showToast(how === 'shared' ? 'Choose where to save the Word file.' : 'Word document exported.', 'success');
         } catch (err) {
             console.error('Word generation failed:', err);
             showToast('Word export failed. See console.', 'error');
@@ -514,11 +748,12 @@ function engageHyperdrive() {
     // ------------------------------------------
     // EXPORT: MARKDOWN
     // ------------------------------------------
-    function exportToMarkdown() {
+    async function exportToMarkdown() {
         if (!editor.value.trim()) { showToast('Nothing to export yet.', 'error'); return; }
         const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' });
-        downloadBlob(blob, currentFileName + '.md');
-        showToast('Markdown saved.', 'success');
+        const how = await saveFile(blob, currentFileName + '.md', 'text/markdown');
+        if (how === 'cancelled') return;
+        showToast(how === 'shared' ? 'Choose where to save the Markdown file.' : 'Markdown saved.', 'success');
     }
 
     // ------------------------------------------
